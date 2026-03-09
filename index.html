@@ -17,23 +17,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; overflow-x: hidden; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; }
         
-        /* Dropdown reset for cleaner UI */
         select {
             -webkit-appearance: none;
             -moz-appearance: none;
             appearance: none;
         }
 
-        /* Drag effect */
         tr.dragging {
             opacity: 0.5;
             background-color: #3b82f620;
+        }
+
+        /* Transition for view size scaling */
+        .view-transition {
+            transition: font-size 0.2s ease-in-out, padding 0.2s ease-in-out;
         }
     </style>
 </head>
@@ -42,7 +45,7 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
-        // Ambil icon dari window.lucide
+        
         const Icons = {
             Users: () => <i data-lucide="users"></i>,
             CheckCircle: (props) => <i data-lucide="check-circle" {...props}></i>,
@@ -74,7 +77,8 @@
             ExternalLink: () => <i data-lucide="external-link"></i>,
             GripVertical: () => <i data-lucide="grip-vertical"></i>,
             ArrowUp: () => <i data-lucide="arrow-up"></i>,
-            ArrowDown: () => <i data-lucide="arrow-down"></i>
+            ArrowDown: () => <i data-lucide="arrow-down"></i>,
+            Type: () => <i data-lucide="type"></i>
         };
 
         const SESSION_LINKS = {
@@ -144,6 +148,7 @@
             const [activeTab, setActiveTab] = useState('dashboard');
             const [searchTerm, setSearchTerm] = useState('');
             const [isDarkMode, setIsDarkMode] = useState(false);
+            const [viewSize, setViewSize] = useState('medium'); // 'small', 'medium', 'large'
             const [isSyncing, setIsSyncing] = useState(false);
             const [students, setStudents] = useState(INITIAL_STUDENTS);
             const [attendanceData, setAttendanceData] = useState([]);
@@ -172,11 +177,19 @@
 
             useEffect(() => {
                 lucide.createIcons();
-            }, [activeTab, isDarkMode, students, isAddModalOpen, isEditModalOpen]);
+            }, [activeTab, isDarkMode, students, isAddModalOpen, isEditModalOpen, viewSize]);
 
             const filteredStudents = useMemo(() => {
                 return students.filter(s => (s.nama || "").toLowerCase().includes(searchTerm.toLowerCase()) || (s.nim || "").includes(searchTerm));
             }, [searchTerm, students]);
+
+            const sizeClasses = useMemo(() => {
+                switch(viewSize) {
+                    case 'small': return 'text-[11px] leading-tight';
+                    case 'large': return 'text-[16px] leading-normal';
+                    default: return 'text-[13px] leading-relaxed';
+                }
+            }, [viewSize]);
 
             // --- DRAG & DROP ---
             const handleDragStart = (index) => setDraggedItemIndex(index);
@@ -300,13 +313,13 @@
 
             return (
                 <div 
-                    className={`min-h-screen transition-all duration-500 bg-fixed bg-cover bg-center ${isDarkMode ? 'dark text-white' : 'text-slate-900'}`}
+                    className={`min-h-screen transition-all duration-500 bg-fixed bg-cover bg-center view-transition ${isDarkMode ? 'dark text-white' : 'text-slate-900'} ${sizeClasses}`}
                     style={{ backgroundImage: `url(${isDarkMode ? BG_DARK : BG_LIGHT})` }}
                 >
-                    <div className={isDarkMode ? 'bg-slate-900/40 min-h-screen' : ''}>
+                    <div className={isDarkMode ? 'bg-slate-950/70 min-h-screen' : 'bg-white/10 min-h-screen'}>
                     
                     {/* NAVBAR */}
-                    <header className={`sticky top-0 z-40 border-b transition-all duration-300 ${isDarkMode ? 'bg-slate-900/80 border-white/10 backdrop-blur-md' : 'bg-white/80 border-slate-200 backdrop-blur-md'}`}>
+                    <header className={`sticky top-0 z-40 border-b transition-all duration-300 ${isDarkMode ? 'bg-slate-900/90 border-white/10 backdrop-blur-md' : 'bg-white/90 border-slate-200 backdrop-blur-md'}`}>
                         <div className="max-w-7xl mx-auto px-4 h-24 flex items-center justify-between">
                             <div className="flex items-center space-x-6">
                                 <img src={LOGO_URL} alt="Logo" className="w-20 h-20 object-contain bg-white p-1 rounded-2xl shadow-xl" />
@@ -315,11 +328,18 @@
                                     <p className={`text-[10px] mt-1 uppercase tracking-[0.2em] font-black ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>Sistem Rekapitulasi Digital</p>
                                 </div>
                             </div>
-                            <nav className="hidden md:flex items-center space-x-2">
-                                <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg flex items-center gap-2 ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}><Icons.BarChart3 /> Beranda</button>
-                                <button onClick={() => setActiveTab('absensi')} className={`px-4 py-2 rounded-lg flex items-center gap-2 ${activeTab === 'absensi' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}><Icons.Calendar /> Absensi</button>
-                                <button onClick={() => setActiveTab('tugas')} className={`px-4 py-2 rounded-lg flex items-center gap-2 ${activeTab === 'tugas' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}><Icons.FileText /> Tugas</button>
-                                <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 transition-all text-slate-500">{isDarkMode ? <Icons.Sun /> : <Icons.Moon />}</button>
+                            <nav className="hidden md:flex items-center space-x-4">
+                                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                                    <button onClick={() => setViewSize('small')} className={`px-2 py-1 rounded-lg text-[10px] font-bold ${viewSize === 'small' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'}`}>S</button>
+                                    <button onClick={() => setViewSize('medium')} className={`px-2 py-1 rounded-lg text-[10px] font-bold ${viewSize === 'medium' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'}`}>M</button>
+                                    <button onClick={() => setViewSize('large')} className={`px-2 py-1 rounded-lg text-[10px] font-bold ${viewSize === 'large' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'}`}>L</button>
+                                </div>
+                                <div className="flex items-center space-x-2 border-l border-slate-200 dark:border-slate-700 pl-4">
+                                    <button onClick={() => setActiveTab('dashboard')} className={`px-4 py-2 rounded-lg flex items-center gap-2 font-bold ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Icons.BarChart3 /> Beranda</button>
+                                    <button onClick={() => setActiveTab('absensi')} className={`px-4 py-2 rounded-lg flex items-center gap-2 font-bold ${activeTab === 'absensi' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Icons.Calendar /> Absensi</button>
+                                    <button onClick={() => setActiveTab('tugas')} className={`px-4 py-2 rounded-lg flex items-center gap-2 font-bold ${activeTab === 'tugas' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Icons.FileText /> Tugas</button>
+                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all text-slate-500">{isDarkMode ? <Icons.Sun /> : <Icons.Moon />}</button>
+                                </div>
                             </nav>
                         </div>
                     </header>
@@ -336,39 +356,39 @@
 
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                     <div className="lg:col-span-2 space-y-6">
-                                        <div className={`p-8 rounded-[2rem] border shadow-2xl ${isDarkMode ? 'bg-slate-900/60 border-white/10' : 'bg-white/70 border-white/40'}`}>
+                                        <div className={`p-8 rounded-[2rem] border shadow-2xl transition-all ${isDarkMode ? 'bg-slate-900/80 border-white/10 text-white' : 'bg-white/70 border-white/40 text-slate-800'}`}>
                                             <div className="flex justify-between items-center mb-8">
                                                 <h3 className="font-black text-lg flex items-center gap-3 uppercase text-blue-600"><Icons.Settings2 /> Kontrol Panel</h3>
-                                                <div className="flex gap-2">
-                                                    <button onClick={shuffleStudents} className="px-4 py-2 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase hover:bg-amber-600 transition-all shadow-lg"><Icons.Shuffle /> Acak Nama</button>
-                                                    <button onClick={() => setIsAddModalOpen(true)} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-blue-700 transition-all shadow-lg"><Icons.UserPlus /> Tambah Data</button>
+                                                <div className="flex gap-2 text-white">
+                                                    <button onClick={shuffleStudents} className="px-4 py-2 bg-amber-500 rounded-xl text-[10px] font-black uppercase hover:bg-amber-600 transition-all shadow-lg"><Icons.Shuffle /> Acak Nama</button>
+                                                    <button onClick={() => setIsAddModalOpen(true)} className="px-4 py-2 bg-blue-600 rounded-xl text-[10px] font-black uppercase hover:bg-blue-700 transition-all shadow-lg"><Icons.UserPlus /> Tambah Data</button>
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-slate-800">
-                                                <div className="space-y-4 p-6 bg-blue-50/50 rounded-3xl border border-blue-100">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className={`space-y-4 p-6 rounded-3xl border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-blue-50/50 border-blue-100'}`}>
                                                     <p className="text-[10px] font-black uppercase opacity-60">Sesi Kehadiran</p>
-                                                    <select value={activePertemuan} onChange={(e) => setActivePertemuan(parseInt(e.target.value))} className="w-full p-3 rounded-xl border bg-white font-bold text-sm">
+                                                    <select value={activePertemuan} onChange={(e) => setActivePertemuan(parseInt(e.target.value))} className={`w-full p-3 rounded-xl border font-bold text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white`}>
                                                         {[...Array(14)].map((_, i) => <option key={i} value={i+1}>Pertemuan {i+1}</option>)}
                                                         <option value="99">UTS</option>
                                                         <option value="100">UAS</option>
                                                     </select>
-                                                    <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} className="w-full p-3 rounded-xl border font-bold text-sm" />
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => { setLectureMode('online'); setIsInputModalOpen(true); }} className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase">Online</button>
-                                                        <button onClick={() => { setLectureMode('offline'); setIsInputModalOpen(true); }} className="flex-1 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase">Offline</button>
+                                                    <input type="date" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} className={`w-full p-3 rounded-xl border font-bold text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white`} />
+                                                    <div className="flex gap-2 text-white">
+                                                        <button onClick={() => { setLectureMode('online'); setIsInputModalOpen(true); }} className="flex-1 py-3 bg-blue-600 rounded-xl text-[10px] font-black uppercase">Online</button>
+                                                        <button onClick={() => { setLectureMode('offline'); setIsInputModalOpen(true); }} className="flex-1 py-3 bg-emerald-600 rounded-xl text-[10px] font-black uppercase">Offline</button>
                                                     </div>
                                                 </div>
-                                                <div className="space-y-4 p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100">
+                                                <div className={`space-y-4 p-6 rounded-3xl border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-indigo-50/50 border-indigo-100'}`}>
                                                     <p className="text-[10px] font-black uppercase opacity-60">Sesi Tugas</p>
-                                                    <select value={activeTugasDropdown} onChange={(e) => setActiveTugasDropdown(parseInt(e.target.value))} className="w-full p-3 rounded-xl border bg-white font-bold text-sm">
+                                                    <select value={activeTugasDropdown} onChange={(e) => setActiveTugasDropdown(parseInt(e.target.value))} className={`w-full p-3 rounded-xl border font-bold text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white`}>
                                                         {[...Array(6)].map((_, i) => <option key={i} value={i+1}>Tugas {i+1}</option>)}
                                                         <option value="99">Proyek UTS</option>
                                                         <option value="100">Proyek UAS</option>
                                                     </select>
-                                                    <input type="date" value={taskDate} onChange={(e) => setTaskDate(e.target.value)} className="w-full p-3 rounded-xl border font-bold text-sm" />
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => { const key = activeTugasDropdown === 99 ? 'uts' : activeTugasDropdown === 100 ? 'uas' : `tugas-${activeTugasDropdown}`; setSchedule({...schedule, assignments: {...schedule.assignments, [key]: { date: taskDate }}})}} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase">Simpan</button>
-                                                        <button onClick={() => { const type = activeTugasDropdown === 99 ? 'uts' : activeTugasDropdown === 100 ? 'uas' : 'tugas'; const initial = {}; students.forEach(s => { initial[s.nim] = assignmentData.some(a => a.nim === s.nim && a.id === activeTugasDropdown && a.type === type) ? 'Selesai' : ''; }); setManualAssignments(initial); setIsTaskInputModalOpen(true); }} className="flex-1 py-3 bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase">Input Tugas</button>
+                                                    <input type="date" value={taskDate} onChange={(e) => setTaskDate(e.target.value)} className={`w-full p-3 rounded-xl border font-bold text-sm bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white`} />
+                                                    <div className="flex gap-2 text-white">
+                                                        <button onClick={() => { const key = activeTugasDropdown === 99 ? 'uts' : activeTugasDropdown === 100 ? 'uas' : `tugas-${activeTugasDropdown}`; setSchedule({...schedule, assignments: {...schedule.assignments, [key]: { date: taskDate }}})}} className="flex-1 py-3 bg-indigo-600 rounded-xl text-[10px] font-black uppercase">Simpan</button>
+                                                        <button onClick={() => { const type = activeTugasDropdown === 99 ? 'uts' : activeTugasDropdown === 100 ? 'uas' : 'tugas'; const initial = {}; students.forEach(s => { initial[s.nim] = assignmentData.some(a => a.nim === s.nim && a.id === activeTugasDropdown && a.type === type) ? 'Selesai' : ''; }); setManualAssignments(initial); setIsTaskInputModalOpen(true); }} className="flex-1 py-3 bg-violet-600 rounded-xl text-[10px] font-black uppercase">Input Tugas</button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -388,29 +408,29 @@
                         {/* TABEL REKAPITULASI */}
                         {(activeTab === 'absensi' || activeTab === 'tugas') && (
                             <div className="space-y-4 animate-in slide-in-from-bottom">
-                                <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-6 rounded-[2rem] border ${isDarkMode ? 'bg-slate-900/60 border-white/10' : 'bg-white/70 border-slate-200 shadow-xl'}`}>
+                                <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-6 rounded-[2rem] border transition-all ${isDarkMode ? 'bg-slate-900/80 border-white/10 text-white' : 'bg-white/70 border-slate-200 shadow-xl'}`}>
                                     <div className="flex items-center gap-4">
                                         <h2 className="font-black text-2xl uppercase tracking-tighter">{activeTab === 'absensi' ? 'Rekap Absensi' : 'Rekap Tugas'}</h2>
                                         <button onClick={handleExport} className="px-5 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg"><Icons.Download /> EXPORT XLSX</button>
                                     </div>
                                     <div className="relative">
-                                        <input type="text" placeholder="Cari..." className={`pl-6 pr-6 py-3 rounded-2xl text-sm w-full lg:w-80 outline-none font-bold ${isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-slate-50 border-slate-200'}`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                        <input type="text" placeholder="Cari..." className={`pl-6 pr-6 py-3 rounded-2xl text-sm w-full lg:w-80 outline-none font-bold ${isDarkMode ? 'bg-slate-800 border-white/5 text-white shadow-inner' : 'bg-slate-50 border-slate-200 shadow-inner'}`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                     </div>
                                 </div>
 
-                                <div className={`rounded-[2rem] border overflow-hidden shadow-2xl ${isDarkMode ? 'bg-slate-900/60 border-white/10' : 'bg-white/70 border-slate-200'}`}>
+                                <div className={`rounded-[2rem] border overflow-hidden shadow-2xl transition-all ${isDarkMode ? 'bg-slate-900/90 border-white/10' : 'bg-white/70 border-slate-200'}`}>
                                     <div className="overflow-x-auto custom-scrollbar">
                                         <table className="w-full text-sm text-left border-collapse">
-                                            <thead className={`text-[10px] font-black uppercase tracking-widest border-b ${isDarkMode ? 'bg-white/5 text-slate-400' : 'bg-slate-50 text-slate-500'}`}>
+                                            <thead className={`text-[10px] font-black uppercase tracking-widest border-b ${isDarkMode ? 'bg-slate-800 text-slate-400 border-white/5' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
                                                 <tr>
-                                                    <th className="px-4 py-8 sticky left-0 z-30 backdrop-blur-xl border-r border-slate-200/50">Geser</th>
-                                                    <th className="px-8 py-8 sticky left-16 z-20 backdrop-blur-xl border-r border-slate-200/50 min-w-[220px]">Nama & NIM</th>
+                                                    <th className="px-4 py-8 sticky left-0 z-30 backdrop-blur-xl border-r border-slate-200/50 dark:border-white/5">Geser</th>
+                                                    <th className="px-8 py-8 sticky left-16 z-20 backdrop-blur-xl border-r border-slate-200/50 dark:border-white/5 min-w-[220px]">Nama & NIM</th>
                                                     {activeTab === 'absensi' ? (
                                                         <>
                                                             {[...Array(14)].map((_, i) => {
                                                                 const sched = schedule.attendance[`pertemuan-${i+1}`];
                                                                 return (
-                                                                    <th key={i} className="px-3 py-8 text-center min-w-[100px] border-l border-slate-100/50">
+                                                                    <th key={i} className="px-3 py-8 text-center min-w-[100px] border-l border-slate-100/50 dark:border-white/5">
                                                                         <div className="font-black">P{i+1}</div>
                                                                         <div className="text-[7px] font-bold opacity-60">{sched?.date ? sched.date.split('-').reverse().join('/') : 'TBA'}</div>
                                                                         <div className={`text-[7px] font-black px-1.5 rounded-full ${sched?.mode === 'online' ? 'bg-blue-100 text-blue-600' : sched?.mode === 'offline' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 opacity-50'}`}>{sched?.mode ? sched.mode.toUpperCase() : 'BELUM'}</div>
@@ -425,7 +445,7 @@
                                                             {[...Array(6)].map((_, i) => {
                                                                 const sched = schedule.assignments[`tugas-${i+1}`];
                                                                 return (
-                                                                    <th key={i} className="px-4 py-8 text-center min-w-[110px] border-l border-slate-100/50">
+                                                                    <th key={i} className="px-4 py-8 text-center min-w-[110px] border-l border-slate-100/50 dark:border-white/5">
                                                                         <div className="font-black">T{i+1}</div>
                                                                         <div className="text-[7px] font-bold opacity-60 uppercase">{sched?.date ? sched.date : 'TBA'}</div>
                                                                     </th>
@@ -435,7 +455,7 @@
                                                             <th className="px-4 py-8 text-center min-w-[110px] bg-indigo-500/10 text-indigo-600 border-l font-black">PROYEK UAS</th>
                                                         </>
                                                     )}
-                                                    <th className="px-8 py-8 text-center border-l bg-slate-50/50">Tindakan</th>
+                                                    <th className="px-8 py-8 text-center border-l bg-slate-50/50 dark:bg-slate-800/50 font-black uppercase">Tindakan</th>
                                                 </tr>
                                             </thead>
                                             <tbody className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-slate-100'}`}>
@@ -448,12 +468,12 @@
                                                             onDragStart={() => handleDragStart(originalIndex)}
                                                             onDragOver={handleDragOver}
                                                             onDrop={() => handleDrop(originalIndex)}
-                                                            className={`group ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-white/50'} cursor-move`}
+                                                            className={`group transition-all cursor-move ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-white/50'}`}
                                                         >
-                                                            <td className={`px-4 py-5 sticky left-0 z-30 text-center backdrop-blur-xl border-r border-slate-200/50 ${isDarkMode ? 'bg-slate-900/90' : 'bg-slate-50/95'}`}>
+                                                            <td className={`px-4 py-5 sticky left-0 z-30 text-center backdrop-blur-xl border-r border-slate-200/50 dark:border-white/5 ${isDarkMode ? 'bg-slate-900/90 text-slate-500' : 'bg-slate-50/95 text-slate-400'}`}>
                                                                 <div className="flex flex-col items-center text-slate-300 group-hover:text-blue-500"><Icons.GripVertical /><span className="text-[9px] font-black">{idx + 1}</span></div>
                                                             </td>
-                                                            <td className={`px-8 py-5 sticky left-16 z-20 backdrop-blur-xl border-r border-slate-200/50 ${isDarkMode ? 'bg-slate-900/90 text-white' : 'bg-white/95 text-slate-800 shadow-[2px_0_10px_rgba(0,0,0,0.02)]'}`}>
+                                                            <td className={`px-8 py-5 sticky left-16 z-20 backdrop-blur-xl border-r border-slate-200/50 dark:border-white/5 ${isDarkMode ? 'bg-slate-900/90 text-white' : 'bg-white/95 text-slate-800 shadow-[2px_0_10px_rgba(0,0,0,0.02)]'}`}>
                                                                 <div className="truncate max-w-[200px] text-xs font-black uppercase">{student.nama}</div>
                                                                 <div className="text-[9px] font-mono opacity-30 font-black uppercase tracking-widest">{student.nim}</div>
                                                             </td>
@@ -462,10 +482,10 @@
                                                                     {[...Array(14)].map((_, i) => {
                                                                         const rec = attendanceData.find(a => a.nim === student.nim && a.id === i+1 && a.type === 'pertemuan');
                                                                         return (
-                                                                            <td key={i} className="px-3 py-5 border-l border-slate-100/30">
+                                                                            <td key={i} className="px-3 py-5 border-l border-slate-100/30 dark:border-white/5">
                                                                                 <div className="flex justify-center">
                                                                                     <select 
-                                                                                        className={`text-[9px] font-black p-2 rounded-xl border-none text-center cursor-pointer appearance-none ${!rec?.status ? 'bg-slate-100 text-slate-400 opacity-20' : rec.status === 'Hadir' ? 'bg-emerald-500 text-white' : rec.status === 'Izin' ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white'}`}
+                                                                                        className={`text-[9px] font-black p-2 rounded-xl border-none text-center cursor-pointer appearance-none transition-all ${!rec?.status ? (isDarkMode ? 'bg-slate-800 text-slate-600' : 'bg-slate-100 text-slate-400') : rec.status === 'Hadir' ? 'bg-emerald-500 text-white' : rec.status === 'Izin' ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white'}`}
                                                                                         value={rec?.status || ""}
                                                                                         onChange={(e) => updateAttendance(student.nim, i+1, 'pertemuan', e.target.value)}
                                                                                     >
@@ -476,27 +496,27 @@
                                                                             </td>
                                                                         );
                                                                     })}
-                                                                    <td className="px-3 py-5 bg-blue-500/5 border-l border-slate-100/30"><select className="text-[9px] font-black p-2 rounded-xl bg-white w-full text-center border-none" value={attendanceData.find(a => a.nim === student.nim && a.type === 'uts')?.status || ""} onChange={(e) => updateAttendance(student.nim, 99, 'uts', e.target.value)}><option value="">−</option><option value="Hadir">H</option><option value="Izin">I</option><option value="Alpa">A</option></select></td>
-                                                                    <td className="px-3 py-5 bg-blue-500/5 border-l border-slate-100/30"><select className="text-[9px] font-black p-2 rounded-xl bg-white w-full text-center border-none" value={attendanceData.find(a => a.nim === student.nim && a.type === 'uas')?.status || ""} onChange={(e) => updateAttendance(student.nim, 100, 'uas', e.target.value)}><option value="">−</option><option value="Hadir">H</option><option value="Izin">I</option><option value="Alpa">A</option></select></td>
+                                                                    <td className="px-3 py-5 bg-blue-500/5 border-l border-slate-100/30 dark:border-white/5"><select className={`text-[9px] font-black p-2 rounded-xl w-full text-center border-none ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-800'}`} value={attendanceData.find(a => a.nim === student.nim && a.type === 'uts')?.status || ""} onChange={(e) => updateAttendance(student.nim, 99, 'uts', e.target.value)}><option value="">−</option><option value="Hadir">H</option><option value="Izin">I</option><option value="Alpa">A</option></select></td>
+                                                                    <td className="px-3 py-5 bg-blue-500/5 border-l border-slate-100/30 dark:border-white/5"><select className={`text-[9px] font-black p-2 rounded-xl w-full text-center border-none ${isDarkMode ? 'bg-slate-800 text-white' : 'bg-white text-slate-800'}`} value={attendanceData.find(a => a.nim === student.nim && a.type === 'uas')?.status || ""} onChange={(e) => updateAttendance(student.nim, 100, 'uas', e.target.value)}><option value="">−</option><option value="Hadir">H</option><option value="Izin">I</option><option value="Alpa">A</option></select></td>
                                                                 </>
                                                             ) : (
                                                                 <>
                                                                     {[...Array(6)].map((_, i) => {
                                                                         const rec = assignmentData.find(a => a.nim === student.nim && a.id === i+1 && a.type === 'tugas');
                                                                         return (
-                                                                            <td key={i} className="px-3 py-5 border-l border-slate-100/30 text-center">
-                                                                                <select className={`text-[8px] font-black p-2 rounded-xl border-none text-center appearance-none ${rec ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 opacity-20'}`} value={rec ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, i+1, 'tugas', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select>
+                                                                            <td key={i} className="px-3 py-5 border-l border-slate-100/30 dark:border-white/5 text-center">
+                                                                                <select className={`text-[8px] font-black p-2 rounded-xl border-none text-center appearance-none ${rec ? 'bg-indigo-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-600' : 'bg-slate-100 text-slate-400')}`} value={rec ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, i+1, 'tugas', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select>
                                                                             </td>
                                                                         );
                                                                     })}
-                                                                    <td className="px-3 py-5 bg-indigo-500/5 border-l border-slate-100/30 text-center"><select className={`text-[8px] font-black p-2 rounded-xl border-none text-center appearance-none ${assignmentData.some(a => a.nim === student.nim && a.type === 'uts') ? 'bg-indigo-800 text-white' : 'bg-white opacity-20'}`} value={assignmentData.some(a => a.nim === student.nim && a.type === 'uts') ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, 99, 'uts', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select></td>
-                                                                    <td className="px-3 py-5 bg-indigo-500/5 border-l border-slate-100/30 text-center"><select className={`text-[8px] font-black p-2 rounded-xl border-none text-center appearance-none ${assignmentData.some(a => a.nim === student.nim && a.type === 'uas') ? 'bg-indigo-800 text-white' : 'bg-white opacity-20'}`} value={assignmentData.some(a => a.nim === student.nim && a.type === 'uas') ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, 100, 'uas', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select></td>
+                                                                    <td className="px-3 py-5 bg-indigo-500/5 border-l border-slate-100/30 dark:border-white/5 text-center"><select className={`text-[8px] font-black p-2 rounded-xl border-none text-center appearance-none ${assignmentData.some(a => a.nim === student.nim && a.type === 'uts') ? 'bg-indigo-800 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-600' : 'bg-white opacity-40')}`} value={assignmentData.some(a => a.nim === student.nim && a.type === 'uts') ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, 99, 'uts', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select></td>
+                                                                    <td className="px-3 py-5 bg-indigo-500/5 border-l border-slate-100/30 dark:border-white/5 text-center"><select className={`text-[8px] font-black p-2 rounded-xl border-none text-center appearance-none ${assignmentData.some(a => a.nim === student.nim && a.type === 'uas') ? 'bg-indigo-800 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-600' : 'bg-white opacity-40')}`} value={assignmentData.some(a => a.nim === student.nim && a.type === 'uas') ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, 100, 'uas', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select></td>
                                                                 </>
                                                             )}
-                                                            <td className="px-8 py-5 text-center border-l bg-slate-50/20">
+                                                            <td className="px-8 py-5 text-center border-l bg-slate-50/20 dark:bg-slate-800/20">
                                                                 <div className="flex gap-2 justify-center">
-                                                                    <button onClick={() => openEditModal(student)} className="p-2.5 rounded-xl transition-all bg-white border hover:bg-blue-600 hover:text-white text-slate-400 shadow-sm"><Icons.Edit2 /></button>
-                                                                    <button onClick={() => handleDeleteStudent(student.nim)} className="p-2.5 rounded-xl transition-all bg-white border border-rose-50 hover:bg-rose-500 hover:text-white text-rose-400 shadow-sm"><Icons.Trash2 /></button>
+                                                                    <button onClick={() => openEditModal(student)} className={`p-2.5 rounded-xl transition-all border dark:border-white/5 ${isDarkMode ? 'bg-slate-800 text-blue-400 hover:bg-blue-600 hover:text-white' : 'bg-white hover:bg-blue-600 hover:text-white text-slate-400 shadow-sm'}`}><Icons.Edit2 /></button>
+                                                                    <button onClick={() => handleDeleteStudent(student.nim)} className={`p-2.5 rounded-xl transition-all border dark:border-white/5 ${isDarkMode ? 'bg-slate-800 text-rose-500 hover:bg-rose-500 hover:text-white' : 'bg-white border-rose-50 hover:bg-rose-500 hover:text-white text-rose-400 shadow-sm'}`}><Icons.Trash2 /></button>
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -511,30 +531,30 @@
                     </main>
 
                     {/* MODALS */}
-                    {isAddModalOpen && <Modal title="Daftar Mahasiswa Baru" onClose={() => setIsAddModalOpen(false)} icon={<Icons.UserPlus />}>
+                    {isAddModalOpen && <Modal title="Daftar Mahasiswa Baru" isDark={isDarkMode} onClose={() => setIsAddModalOpen(false)} icon={<Icons.UserPlus />}>
                         <div className="space-y-4 p-8">
-                            <input type="text" placeholder="Nama" className="w-full px-6 py-4 rounded-2xl border font-bold bg-slate-50" value={newStudent.nama} onChange={e => setNewStudent({...newStudent, nama: e.target.value})} />
-                            <input type="text" placeholder="NIM" className="w-full px-6 py-4 rounded-2xl border font-bold bg-slate-50" value={newStudent.nim} onChange={e => setNewStudent({...newStudent, nim: e.target.value})} />
+                            <input type="text" placeholder="Nama" className={`w-full px-6 py-4 rounded-2xl border font-bold ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-slate-50 border-slate-200'}`} value={newStudent.nama} onChange={e => setNewStudent({...newStudent, nama: e.target.value})} />
+                            <input type="text" placeholder="NIM" className={`w-full px-6 py-4 rounded-2xl border font-bold ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-slate-50 border-slate-200'}`} value={newStudent.nim} onChange={e => setNewStudent({...newStudent, nim: e.target.value})} />
                             <button onClick={handleAddStudent} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase shadow-xl">Daftarkan Mahasiswa</button>
                         </div>
                     </Modal>}
 
-                    {isEditModalOpen && <Modal title="Edit Profil" onClose={() => setIsEditModalOpen(false)} icon={<Icons.Edit2 />}>
+                    {isEditModalOpen && <Modal title="Edit Profil" isDark={isDarkMode} onClose={() => setIsEditModalOpen(false)} icon={<Icons.Edit2 />}>
                         <div className="space-y-4 p-8">
-                            <input type="text" className="w-full px-6 py-4 rounded-2xl border font-bold" value={editingData.nama} onChange={e => setEditingData({...editingData, nama: e.target.value})} />
-                            <input type="text" className="w-full px-6 py-4 rounded-2xl border font-bold" value={editingData.nim} onChange={e => setEditingData({...editingData, nim: e.target.value})} />
+                            <input type="text" className={`w-full px-6 py-4 rounded-2xl border font-bold ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white'}`} value={editingData.nama} onChange={e => setEditingData({...editingData, nama: e.target.value})} />
+                            <input type="text" className={`w-full px-6 py-4 rounded-2xl border font-bold ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white'}`} value={editingData.nim} onChange={e => setEditingData({...editingData, nim: e.target.value})} />
                             <button onClick={handleSaveEdit} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase shadow-xl">Simpan Perubahan</button>
                         </div>
                     </Modal>}
 
-                    {isInputModalOpen && <Modal title={`Rekap P${activePertemuan}`} onClose={() => setIsInputModalOpen(false)} icon={<Icons.UserCheck />}>
-                        <div className="p-8 space-y-6">
+                    {isInputModalOpen && <Modal title={`Rekap P${activePertemuan}`} isDark={isDarkMode} onClose={() => setIsInputModalOpen(false)} icon={<Icons.UserCheck />}>
+                        <div className="p-8 space-y-6 text-slate-800 dark:text-white">
                             {lectureMode === 'online' ? (
                                 <div className="text-center space-y-4">
-                                    <div className="p-5 bg-blue-50 text-blue-600 rounded-3xl font-mono text-xs break-all">{SESSION_LINKS[activePertemuan]}</div>
+                                    <div className={`p-5 rounded-3xl font-mono text-xs break-all ${isDarkMode ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-600'}`}>{SESSION_LINKS[activePertemuan]}</div>
                                     <div className="flex flex-col gap-3">
                                         <a href={SESSION_LINKS[activePertemuan]} target="_blank" className="py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs">Buka Form</a>
-                                        <button onClick={handleAutoSync} disabled={isSyncing} className="py-4 border-2 border-blue-600 text-blue-600 rounded-2xl font-black uppercase text-xs">{isSyncing ? 'Sinkron...' : 'Sinkronkan NIM'}</button>
+                                        <button onClick={handleAutoSync} disabled={isSyncing} className={`py-4 border-2 border-blue-600 text-blue-600 rounded-2xl font-black uppercase text-xs ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>{isSyncing ? 'Sinkron...' : 'Sinkronkan NIM'}</button>
                                     </div>
                                 </div>
                             ) : (
@@ -542,10 +562,10 @@
                                     <button onClick={() => { let m={}; students.forEach(s=>m[s.nim]='Hadir'); setManualAttendance(m); }} className="w-full py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase">Set Semua Hadir</button>
                                     <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                                         {students.map(s => (
-                                            <div key={s.nim} className="flex justify-between items-center p-3 border rounded-xl bg-white shadow-sm">
+                                            <div key={s.nim} className={`flex justify-between items-center p-3 border rounded-xl shadow-sm ${isDarkMode ? 'bg-slate-800 border-white/5' : 'bg-white'}`}>
                                                 <span className="text-[10px] font-black uppercase truncate max-w-[140px]">{s.nama}</span>
                                                 <div className="flex gap-1">{['Hadir', 'Izin', 'Alpa'].map(st => (
-                                                    <button key={st} onClick={() => setManualAttendance({...manualAttendance, [s.nim]: st})} className={`w-8 h-8 rounded-lg text-[9px] font-black border ${manualAttendance[s.nim] === st ? 'bg-blue-600 text-white' : 'bg-slate-50'}`}>{st[0]}</button>
+                                                    <button key={st} onClick={() => setManualAttendance({...manualAttendance, [s.nim]: st})} className={`w-8 h-8 rounded-lg text-[9px] font-black border transition-all ${manualAttendance[s.nim] === st ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-100 dark:bg-slate-700 dark:border-white/10'}`}>{st[0]}</button>
                                                 ))}</div>
                                             </div>
                                         ))}
@@ -556,14 +576,14 @@
                         </div>
                     </Modal>}
 
-                    {isTaskInputModalOpen && <Modal title="Input Tugas Masal" onClose={() => setIsTaskInputModalOpen(false)} icon={<Icons.ClipboardCheck />}>
-                        <div className="p-8 space-y-4">
+                    {isTaskInputModalOpen && <Modal title="Input Tugas Masal" isDark={isDarkMode} onClose={() => setIsTaskInputModalOpen(false)} icon={<Icons.ClipboardCheck />}>
+                        <div className="p-8 space-y-4 text-slate-800 dark:text-white">
                             <button onClick={() => { const all = {}; students.forEach(s => all[s.nim] = 'Selesai'); setManualAssignments(all); }} className="w-full py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase">Tandai Semua Selesai</button>
                             <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                                 {students.map(s => (
-                                    <div key={s.nim} className="flex justify-between items-center p-3 border rounded-xl bg-white shadow-sm">
+                                    <div key={s.nim} className={`flex justify-between items-center p-3 border rounded-xl shadow-sm ${isDarkMode ? 'bg-slate-800 border-white/5' : 'bg-white'}`}>
                                         <span className="text-[10px] font-black uppercase truncate max-w-[140px]">{s.nama}</span>
-                                        <button onClick={() => setManualAssignments({...manualAssignments, [s.nim]: manualAssignments[s.nim] === 'Selesai' ? '' : 'Selesai'})} className={`px-4 py-2 rounded-xl text-[9px] font-black border ${manualAssignments[s.nim] === 'Selesai' ? 'bg-indigo-600 text-white' : 'bg-slate-50'}`}>{manualAssignments[s.nim] === 'Selesai' ? 'SELESAI' : 'BELUM'}</button>
+                                        <button onClick={() => setManualAssignments({...manualAssignments, [s.nim]: manualAssignments[s.nim] === 'Selesai' ? '' : 'Selesai'})} className={`px-4 py-2 rounded-xl text-[9px] font-black transition-all ${manualAssignments[s.nim] === 'Selesai' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 dark:bg-slate-700 dark:border-white/10'}`}>{manualAssignments[s.nim] === 'Selesai' ? 'SELESAI' : 'BELUM'}</button>
                                     </div>
                                 ))}
                             </div>
@@ -571,16 +591,16 @@
                         </div>
                     </Modal>}
 
-                    <footer className="py-12 text-center border-t text-[10px] uppercase font-black opacity-40">Keuangan Bisnis Dashboard v6.0 • Cloud Integration © 2026</footer>
+                    <footer className={`py-12 text-center border-t text-[10px] uppercase font-black transition-all ${isDarkMode ? 'border-white/5 opacity-40' : 'opacity-40'}`}>Keuangan Bisnis Dashboard v6.0 • Cloud Integration © 2026</footer>
                     </div>
                 </div>
             );
         };
 
         const StatCard = ({ title, value, icon, isDark }) => (
-            <div className={`p-6 rounded-[2rem] border shadow-lg transition-all ${isDark ? 'bg-slate-900/60 border-white/10 text-white' : 'bg-white/70 border-white/40 text-slate-800'}`}>
+            <div className={`p-6 rounded-[2rem] border shadow-lg transition-all transform hover:-translate-y-1 ${isDark ? 'bg-slate-900/80 border-white/10 text-white' : 'bg-white/70 border-white/40 text-slate-800'}`}>
                 <div className="flex justify-between items-start">
-                    <div><p className="text-[10px] font-black uppercase opacity-40 mb-1">{title}</p><h4 className="text-xl font-black">{value}</h4></div>
+                    <div><p className="text-[10px] font-black uppercase opacity-40 mb-1">{title}</p><h4 className="text-xl font-black uppercase tracking-tight">{value}</h4></div>
                     <div className="p-3 bg-blue-500/20 text-blue-500 rounded-2xl">{icon}</div>
                 </div>
             </div>
@@ -589,14 +609,14 @@
         const QuickActionIcon = ({ icon, label, value }) => (
             <div className="flex items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">{icon}</div>
-                <div><p className="text-[10px] font-bold opacity-40 uppercase">{label}</p><p className="text-xs font-black uppercase">{value}</p></div>
+                <div><p className="text-[10px] font-bold opacity-40 uppercase tracking-widest">{label}</p><p className="text-xs font-black uppercase">{value}</p></div>
             </div>
         );
 
-        const Modal = ({ title, icon, children, onClose }) => (
+        const Modal = ({ title, icon, children, onClose, isDark }) => (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-                <div className="w-full max-w-md bg-white rounded-[2.5rem] overflow-hidden shadow-2xl border flex flex-col max-h-[90vh]">
-                    <div className="p-8 border-b flex items-center justify-between shrink-0">
+                <div className={`w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl border flex flex-col max-h-[90vh] transition-all ${isDark ? 'bg-slate-900 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
+                    <div className={`p-8 border-b flex items-center justify-between shrink-0 ${isDark ? 'border-white/5' : 'border-slate-100'}`}>
                         <div className="flex items-center gap-3 text-blue-600">{icon}<h3 className="font-black text-xl uppercase tracking-tighter">{title}</h3></div>
                         <button onClick={onClose} className="p-2 rounded-full hover:bg-rose-500 hover:text-white transition-all"><Icons.X /></button>
                     </div>
