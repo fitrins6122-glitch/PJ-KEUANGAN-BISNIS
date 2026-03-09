@@ -13,6 +13,11 @@
     <!-- Icons & XLSX -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- Firebase SDK (Compat Version untuk stabilitas di HTML tunggal) -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
@@ -41,8 +46,26 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
         
+        // --- KONFIGURASI FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBdje4IzzsYlyGKIjkptMBLQNBDTm-JAWQ",
+            authDomain: "keuangan-bisnis.firebaseapp.com",
+            projectId: "keuangan-bisnis",
+            storageBucket: "keuangan-bisnis.firebasestorage.app",
+            messagingSenderId: "445353524225",
+            appId: "1:445353524225:web:76fabd5f97aab752a21400",
+            measurementId: "G-5CHX98F030"
+        };
+
+        // Inisialisasi Firebase jika belum ada
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+        // ----------------------------
+
         // PERBAIKAN: Membungkus icon dengan <span> menggunakan dangerouslySetInnerHTML
         // agar React tidak bentrok dengan manipulasi DOM dari Vanilla JS (Lucide)
         const createIcon = (name) => ({ className = '', ...props }) => (
@@ -151,11 +174,16 @@
             const [searchTerm, setSearchTerm] = useState('');
             const [isDarkMode, setIsDarkMode] = useState(false);
             const [isSyncing, setIsSyncing] = useState(false);
+            
             const [students, setStudents] = useState(INITIAL_STUDENTS);
             const [attendanceData, setAttendanceData] = useState([]);
             const [assignmentData, setAssignmentData] = useState([]);
             const [schedule, setSchedule] = useState({ attendance: {}, assignments: {} });
             
+            // State Firebase
+            const [isInitialLoad, setIsInitialLoad] = useState(true);
+            const [cloudStatus, setCloudStatus] = useState('loading'); // loading, saved, saving, error
+
             const [isAddModalOpen, setIsAddModalOpen] = useState(false);
             const [isEditModalOpen, setIsEditModalOpen] = useState(false);
             const [isInputModalOpen, setIsInputModalOpen] = useState(false);
@@ -182,6 +210,67 @@
             useEffect(() => {
                 lucide.createIcons();
             });
+
+            // ==========================================
+            // FIREBASE: Load Data Awal dari Firestore
+            // ==========================================
+            useEffect(() => {
+                const loadData = async () => {
+                    try {
+                        const docRef = db.collection("keuangan_bisnis_db").doc("main_data");
+                        const docSnap = await docRef.get();
+                        
+                        if (docSnap.exists) {
+                            const data = docSnap.data();
+                            if (data.students) setStudents(data.students);
+                            if (data.attendanceData) setAttendanceData(data.attendanceData);
+                            if (data.assignmentData) setAssignmentData(data.assignmentData);
+                            if (data.schedule) setSchedule(data.schedule);
+                        } else {
+                            // First time setup: Simpan struktur awal
+                            await docRef.set({
+                                students: INITIAL_STUDENTS,
+                                attendanceData: [],
+                                assignmentData: [],
+                                schedule: { attendance: {}, assignments: {} }
+                            });
+                        }
+                        setCloudStatus('saved');
+                    } catch(e) {
+                        console.error("Gagal memuat data dari Firebase:", e);
+                        setCloudStatus('error');
+                    } finally {
+                        setIsInitialLoad(false);
+                    }
+                };
+                loadData();
+            }, []);
+
+            // ==========================================
+            // FIREBASE: Auto-Save Data ke Firestore
+            // ==========================================
+            useEffect(() => {
+                // Cegah save otomatis saat pertama kali memuat halaman
+                if (isInitialLoad) return;
+                
+                setCloudStatus('saving');
+                
+                // Gunakan fitur debounce (tunggu 1.5 detik agar tidak membanjiri server saat update cepat)
+                const timer = setTimeout(async () => {
+                    try {
+                        await db.collection("keuangan_bisnis_db").doc("main_data").set({
+                            students, attendanceData, assignmentData, schedule
+                        }, { merge: true });
+                        setCloudStatus('saved');
+                    } catch(e) {
+                        console.error("Gagal menyimpan ke Firebase:", e);
+                        setCloudStatus('error');
+                    }
+                }, 1500);
+
+                return () => clearTimeout(timer);
+            }, [students, attendanceData, assignmentData, schedule, isInitialLoad]);
+
 
             const filteredStudents = useMemo(() => {
                 return students.filter(s => (s.nama || "").toLowerCase().includes(searchTerm.toLowerCase()) || (s.nim || "").includes(searchTerm));
@@ -433,7 +522,23 @@
                                         <h3 className="font-black text-xl mb-6 uppercase tracking-tighter flex items-center gap-2"><Icons.GraduationCap /> Status PJ</h3>
                                         <div className="space-y-4">
                                             <QuickActionIcon icon={<Icons.UserCheck />} label="Mode" value={lectureMode.toUpperCase()} />
-                                            <QuickActionIcon icon={<Icons.Clock />} label="Terakhir" value={new Date().toLocaleTimeString()} />
+                                            
+                                            {/* INDIKATOR CLOUD FIREBASE */}
+                                            <QuickActionIcon 
+                                                icon={
+                                                    cloudStatus === 'loading' ? <Icons.RefreshCw className="animate-spin text-blue-400" /> : 
+                                                    cloudStatus === 'saving' ? <Icons.RefreshCw className="animate-spin text-amber-400" /> : 
+                                                    cloudStatus === 'saved' ? <Icons.CheckCircle className="text-emerald-400" /> : 
+                                                    <Icons.X className="text-rose-400" />
+                                                } 
+                                                label="Cloud Database" 
+                                                value={
+                                                    cloudStatus === 'loading' ? 'Memuat Data...' : 
+                                                    cloudStatus === 'saving' ? 'Menyimpan...' : 
+                                                    cloudStatus === 'saved' ? 'Tersinkronisasi' : 
+                                                    'Koneksi Gagal'
+                                                } 
+                                            />
                                         </div>
                                     </div>
                                 </div>
