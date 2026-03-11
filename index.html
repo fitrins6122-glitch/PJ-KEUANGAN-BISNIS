@@ -66,8 +66,7 @@
         const db = firebase.firestore();
         // ----------------------------
 
-        // PERBAIKAN: Membungkus icon dengan <span> menggunakan dangerouslySetInnerHTML
-        // agar React tidak bentrok dengan manipulasi DOM dari Vanilla JS (Lucide)
+        // Membungkus icon dengan <span> agar React tidak bentrok dengan manipulasi DOM dari Vanilla JS (Lucide)
         const createIcon = (name) => ({ className = '', ...props }) => (
             <span className={`inline-flex items-center justify-center ${className}`} {...props} dangerouslySetInnerHTML={{ __html: `<i data-lucide="${name}"></i>` }} />
         );
@@ -103,7 +102,8 @@
             ExternalLink: createIcon('external-link'),
             GripVertical: createIcon('grip-vertical'),
             ArrowUp: createIcon('arrow-up'),
-            ArrowDown: createIcon('arrow-down')
+            ArrowDown: createIcon('arrow-down'),
+            AlertTriangle: createIcon('alert-triangle')
         };
 
         const SESSION_LINKS = {
@@ -185,16 +185,20 @@
             
             // State Firebase
             const [isInitialLoad, setIsInitialLoad] = useState(true);
-            const [cloudStatus, setCloudStatus] = useState('loading'); // loading, saved, saving, error
+            const [cloudStatus, setCloudStatus] = useState('loading'); 
 
+            // State UI Modals
             const [isAddModalOpen, setIsAddModalOpen] = useState(false);
             const [isEditModalOpen, setIsEditModalOpen] = useState(false);
             const [isInputModalOpen, setIsInputModalOpen] = useState(false);
             const [isTaskInputModalOpen, setIsTaskInputModalOpen] = useState(false);
+            
+            // State Form Data
             const [newStudent, setNewStudent] = useState({ nama: '', nim: '', kampus: 'UB' });
             const [editingData, setEditingData] = useState(null);
             const [draggedItemIndex, setDraggedItemIndex] = useState(null);
 
+            // State Control Panel
             const [activePertemuan, setActivePertemuan] = useState(1);
             const [activeTugasDropdown, setActiveTugasDropdown] = useState(1);
             const [lectureMode, setLectureMode] = useState('offline');
@@ -204,12 +208,15 @@
             const [manualAssignments, setManualAssignments] = useState({});
             const [uploadStatus, setUploadStatus] = useState(null);
 
+            // STATE CUSTOM CONFIRM MODAL (Mencegah window.confirm terblokir)
+            const [studentToDeleteData, setStudentToDeleteData] = useState(null);
+            const [clearAllType, setClearAllType] = useState(null);
+
+            // LOGO APLIKASI
             const LOGO_URL = "https://res.cloudinary.com/dfbkph06k/image/upload/v1773041131/ChatGPT_Image_Mar_9_2026_02_24_03_PM_nm9b7b.png";
             const BG_LIGHT = "https://res.cloudinary.com/dfbkph06k/image/upload/v1773040282/ChatGPT_Image_Mar_9_2026_02_09_09_PM_nec4ra.png";
             const BG_DARK = "https://res.cloudinary.com/dfbkph06k/image/upload/v1773040339/ChatGPT_Image_Mar_9_2026_02_11_41_PM_jjwdzg.png";
 
-            // PERBAIKAN: Jalankan lucide tanpa array dependensi agar selalu melakukan 
-            // pemindaian (scan) setiap kali ada perubahan status/render komponen
             useEffect(() => {
                 lucide.createIcons();
             });
@@ -226,7 +233,6 @@
                         if (docSnap.exists) {
                             const data = docSnap.data();
                             if (data.students) {
-                                // Mencegah data 'kampus' hilang jika mengambil dari Firebase versi lama
                                 let mergedStudents = data.students.map(dbStudent => {
                                     const initialRef = INITIAL_STUDENTS.find(i => i.nim === dbStudent.nim);
                                     return {
@@ -235,13 +241,11 @@
                                     };
                                 });
 
-                                // Sinkronisasi cerdas: Tambahkan mahasiswa baru dari daftar yang belum ada di Cloud Firebase
                                 INITIAL_STUDENTS.forEach(initStudent => {
                                     if (!mergedStudents.some(s => s.nim === initStudent.nim)) {
                                         mergedStudents.push(initStudent);
                                     }
                                 });
-
                                 setStudents(mergedStudents);
                             } else {
                                 setStudents(INITIAL_STUDENTS);
@@ -251,7 +255,6 @@
                             if (data.assignmentData) setAssignmentData(data.assignmentData);
                             if (data.schedule) setSchedule(data.schedule);
                         } else {
-                            // First time setup: Simpan struktur awal
                             await docRef.set({
                                 students: INITIAL_STUDENTS,
                                 attendanceData: [],
@@ -274,12 +277,9 @@
             // FIREBASE: Auto-Save Data ke Firestore
             // ==========================================
             useEffect(() => {
-                // Cegah save otomatis saat pertama kali memuat halaman
                 if (isInitialLoad) return;
                 
                 setCloudStatus('saving');
-                
-                // Gunakan fitur debounce (tunggu 1.5 detik agar tidak membanjiri server saat update cepat)
                 const timer = setTimeout(async () => {
                     try {
                         await db.collection("keuangan_bisnis_db").doc("main_data").set({
@@ -313,20 +313,12 @@
                 setDraggedItemIndex(null);
             };
 
-            // --- LOGIKA ---
+            // --- FUNGSI TAMBAH / EDIT MAHASISWA ---
             const handleAddStudent = () => {
                 if (newStudent.nama && newStudent.nim) {
                     setStudents([...students, newStudent]);
                     setNewStudent({ nama: '', nim: '', kampus: 'UB' });
                     setIsAddModalOpen(false);
-                }
-            };
-
-            const handleDeleteStudent = (nim) => {
-                if (confirm("Hapus mahasiswa ini?")) {
-                    setStudents(prev => prev.filter(s => s.nim !== nim));
-                    setAttendanceData(prev => prev.filter(a => a.nim !== nim));
-                    setAssignmentData(prev => prev.filter(a => a.nim !== nim));
                 }
             };
 
@@ -344,6 +336,28 @@
                 setIsEditModalOpen(false);
             };
 
+            // --- FUNGSI HAPUS DATA MENGGUNAKAN CUSTOM MODAL (TIDAK MENGGUNAKAN window.confirm) ---
+            
+            // 1. Eksekutor Hapus Data Satuan (Tanpa menghapus mahasiswa)
+            const executeDeleteStudentData = () => {
+                if (studentToDeleteData) {
+                    setAttendanceData(prev => prev.filter(a => a.nim !== studentToDeleteData.nim));
+                    setAssignmentData(prev => prev.filter(a => a.nim !== studentToDeleteData.nim));
+                    setStudentToDeleteData(null); // Tutup modal
+                }
+            };
+
+            // 2. Eksekutor Hapus Data Massal
+            const executeClearAllData = () => {
+                if (clearAllType === 'absensi') {
+                    setAttendanceData([]);
+                } else if (clearAllType === 'tugas') {
+                    setAssignmentData([]);
+                }
+                setClearAllType(null); // Tutup modal
+            };
+
+            // --- FUNGSI UPDATE DATA ---
             const updateAttendance = (nim, id, type, status) => {
                 setAttendanceData(prev => {
                     const other = prev.filter(a => !(a.nim === nim && a.id === id && a.type === type));
@@ -429,7 +443,6 @@
 
                         setUploadStatus({ type: 'success', text: `Berhasil! ${syncedCount} respons cocok & ditandai Hadir.` });
                         
-                        // Menutup modal otomatis setelah sukses
                         setTimeout(() => {
                             setUploadStatus(null);
                             setIsInputModalOpen(false);
@@ -444,7 +457,6 @@
 
             const handleExport = async () => {
                 if (activeTab === 'tugas') {
-                    // Export biasa untuk tugas
                     let exportData = students.map((student, index) => {
                         const row = { "No": index + 1, "Nama Mahasiswa": student.nama, "NIM": student.nim, "Kampus": student.kampus || "-" };
                         for (let i = 1; i <= 6; i++) {
@@ -467,41 +479,45 @@
                 }
 
                 // ==========================================
-                // EXPORT ABSENSI DENGAN FORMAT TEMPLATE KAMPUS
+                // EXPORT ABSENSI DENGAN FORMAT TEMPLATE KAMPUS (MERGE CELLS)
                 // ==========================================
-                
-                // Menyiapkan Header Kolom Tanggal dari Jadwal P1-P14
                 const tglPertemuan = [];
-                const modePertemuan = []; // Untuk baris "Off/On" di bawah header
+                const modePertemuan = []; 
                 for (let i = 1; i <= 14; i++) {
                     const sched = schedule.attendance[`pertemuan-${i}`];
-                    // Jika belum ada jadwal, pakai format P1, P2
                     tglPertemuan.push(sched?.date ? sched.date : `P${i}`);
                     modePertemuan.push(sched?.mode ? (sched.mode === 'online' ? 'On' : 'Off') : '');
                 }
 
-                // Array 2 Dimensi (AOA) untuk menyusun sel Excel baris demi baris
+                const utsSched = schedule.attendance['uts'];
+                tglPertemuan.push(utsSched?.date ? utsSched.date : 'UTS');
+                modePertemuan.push(utsSched?.mode === 'online' ? 'On' : (utsSched?.mode === 'offline' ? 'Off' : ''));
+
+                const uasSched = schedule.attendance['uas'];
+                tglPertemuan.push(uasSched?.date ? uasSched.date : 'UAS');
+                modePertemuan.push(uasSched?.mode === 'online' ? 'On' : (uasSched?.mode === 'offline' ? 'Off' : ''));
+
+                // Array 2 Dimensi (AOA) untuk menyusun baris demi baris
                 const sheetData = [
-                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["", "KEMENTERIAN PENDIDIKAN, KEBUDAYAAN, RISET, DAN TEKNOLOGI REPUBLIK INDONESIA", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["", "INTERNATIONAL WOMEN UNIVERSITY", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["", "DAFTAR MAHASISWA SEMESTER GENAP", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["", "TAHUN AKADEMIK 2026/2027", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["", "KODE MK", "", ":", "", "", "", "", "", "", "", "", "", "", "", "", "PRODI / JENJANG", "", "", ": Administrasi Bisnis / S1", "", "", ""],
-                    ["", "MATA KULIAH / SKS", "", ": Keuangan Bisnis", "", "", "", "", "", "", "", "", "", "", "", "", "KELAS / FAKULTAS", "", "", ": AB15/2023", "", "", ""],
-                    ["", "NIP/NIDN", "", ":", "", "", "", "", "", "", "", "", "", "", "", "", "TH. AKADEMIK / JAM", "", "", ": 2026/2027", "", "", ""],
-                    ["", "NAMA DOSEN", "", ": Yusni Nuryani, S.E., M.M", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
-                    // Baris Header Tabel
-                    ["", "NO", "NIM", "NAMA", ...tglPertemuan, "UTS", "UAS", "SAKIT", "IZIN", "ALPA", "HADIR"],
-                    // Baris Indikator Mode (On/Off) di bawah tanggal
-                    ["", "", "", "", ...modePertemuan, schedule.attendance['uts']?.mode === 'online' ? 'On' : (schedule.attendance['uts']?.mode === 'offline' ? 'Off' : ''), schedule.attendance['uas']?.mode === 'online' ? 'On' : (schedule.attendance['uas']?.mode === 'offline' ? 'Off' : ''), "", "", "", ""]
+                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    ["", "KEMENTERIAN PENDIDIKAN, KEBUDAYAAN, RISET, DAN TEKNOLOGI REPUBLIK INDONESIA", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    ["", "INTERNATIONAL WOMEN UNIVERSITY", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    ["", "DAFTAR MAHASISWA SEMESTER GENAP", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    ["", "TAHUN AKADEMIK 2025/2026", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    ["", "KODE MK", "", ":", "", "", "", "", "", "", "", "", "", "", "", "", "PRODI / JENJANG", "", "", ": Administrasi Bisnis / S1", "", "", "", ""],
+                    ["", "MATA KULIAH / SKS", "", ": Keuangan Bisnis", "", "", "", "", "", "", "", "", "", "", "", "", "KELAS / FAKULTAS", "", "", ": AB15/2023", "", "", "", ""],
+                    ["", "NIP/NIDN", "", ":", "", "", "", "", "", "", "", "", "", "", "", "", "TH. AKADEMIK / JAM", "", "", ": 2025/2026", "", "", "", ""],
+                    ["", "NAMA DOSEN", "", ": Dr.Yusni Nuryani, S.E., M.M", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+                    // Baris 13: Header Tabel (Akan digabungkan secara vertikal ke bawah)
+                    ["", "NO", "NIM", "NAMA", ...tglPertemuan, "SAKIT", "IZIN", "ALPA", "HADIR"],
+                    // Baris 14: Keterangan On/Off di bawah tanggal (Area NO, NIM, NAMA dikosongkan karena akan di-merge dari atas)
+                    ["", "", "", "", ...modePertemuan, "", "", "", ""]
                 ];
 
-                // Memasukkan Data Mahasiswa
                 students.forEach((student, index) => {
                     let hadir = 0;
                     let sakit = 0;
@@ -510,44 +526,33 @@
                     
                     const rowData = ["", index + 1, student.nim, student.nama];
                     
-                    // Cek P1 - P14
                     for (let i = 1; i <= 14; i++) {
                         const record = attendanceData.find(a => a.nim === student.nim && a.id === i && a.type === 'pertemuan');
                         if (record) {
-                            // Di template kampus tidak ada simbol spesifik untuk kehadiran harian, 
-                            // asumsikan kita tulis statusnya (H, I, S, A)
                             let statusChar = '';
                             if (record.status === 'Hadir') { statusChar = 'H'; hadir++; }
                             else if (record.status === 'Izin') { statusChar = 'I'; izin++; }
-                            // Disistem kita belum ada "Sakit", asumsikan kalau ada pakai 'S'
                             else if (record.status === 'Alpa') { statusChar = 'A'; alpa++; }
                             rowData.push(statusChar);
                         } else {
-                            rowData.push(''); // Kosong jika belum ada data
+                            rowData.push('');
                         }
                     }
 
-                    // Cek UTS
                     const uts = attendanceData.find(a => a.nim === student.nim && a.type === 'uts');
-                    let utsChar = '';
                     if (uts) {
-                        if (uts.status === 'Hadir') { utsChar = 'H'; hadir++; }
-                        else if (uts.status === 'Izin') { utsChar = 'I'; izin++; }
-                        else if (uts.status === 'Alpa') { utsChar = 'A'; alpa++; }
-                    }
-                    rowData.push(utsChar);
+                        if (uts.status === 'Hadir') { rowData.push('H'); hadir++; }
+                        else if (uts.status === 'Izin') { rowData.push('I'); izin++; }
+                        else if (uts.status === 'Alpa') { rowData.push('A'); alpa++; }
+                    } else { rowData.push(''); }
 
-                    // Cek UAS
                     const uas = attendanceData.find(a => a.nim === student.nim && a.type === 'uas');
-                    let uasChar = '';
                     if (uas) {
-                        if (uas.status === 'Hadir') { uasChar = 'H'; hadir++; }
-                        else if (uas.status === 'Izin') { uasChar = 'I'; izin++; }
-                        else if (uas.status === 'Alpa') { uasChar = 'A'; alpa++; }
-                    }
-                    rowData.push(uasChar);
+                        if (uas.status === 'Hadir') { rowData.push('H'); hadir++; }
+                        else if (uas.status === 'Izin') { rowData.push('I'); izin++; }
+                        else if (uas.status === 'Alpa') { rowData.push('A'); alpa++; }
+                    } else { rowData.push(''); }
 
-                    // Push Total
                     rowData.push(sakit);
                     rowData.push(izin);
                     rowData.push(alpa);
@@ -556,24 +561,36 @@
                     sheetData.push(rowData);
                 });
 
-                // Convert Array of Arrays jadi Sheet
                 const ws = XLSX.utils.aoa_to_sheet(sheetData);
+                
+                // ==========================================
+                // KONFIGURASI MERGE CELLS EXCEL (Penggabungan Sel)
+                // ==========================================
+                ws['!merges'] = [
+                    // Merge Horizontal untuk Kop Surat (Baris 2 hingga 5, Kolom B sampai P)
+                    { s: { r: 2, c: 1 }, e: { r: 2, c: 15 } },
+                    { s: { r: 3, c: 1 }, e: { r: 3, c: 15 } },
+                    { s: { r: 4, c: 1 }, e: { r: 4, c: 15 } },
+                    { s: { r: 5, c: 1 }, e: { r: 5, c: 15 } },
+                    
+                    // Merge Vertikal untuk Header Tabel (NO, NIM, NAMA) dari Baris 13 turun ke 14
+                    { s: { r: 13, c: 1 }, e: { r: 14, c: 1 } }, // NO
+                    { s: { r: 13, c: 2 }, e: { r: 14, c: 2 } }, // NIM
+                    { s: { r: 13, c: 3 }, e: { r: 14, c: 3 } }, // NAMA
+                    
+                    // Merge Vertikal untuk Total Kehadiran di ujung tabel (Baris 13 turun ke 14)
+                    { s: { r: 13, c: 20 }, e: { r: 14, c: 20 } }, // SAKIT
+                    { s: { r: 13, c: 21 }, e: { r: 14, c: 21 } }, // IZIN
+                    { s: { r: 13, c: 22 }, e: { r: 14, c: 22 } }, // ALPA
+                    { s: { r: 13, c: 23 }, e: { r: 14, c: 23 } }  // HADIR
+                ];
 
-                // Mengatur lebar kolom agar rapi (Opsional tapi mempercantik)
+                // Mengatur lebar kolom agar proposional
                 ws['!cols'] = [
-                    { wch: 2 },  // A (Kosong)
-                    { wch: 5 },  // B (NO)
-                    { wch: 15 }, // C (NIM)
-                    { wch: 35 }, // D (NAMA)
-                    // P1-P14
+                    { wch: 2 }, { wch: 5 }, { wch: 15 }, { wch: 35 }, 
                     { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, 
                     { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
-                    { wch: 10 }, // UTS
-                    { wch: 10 }, // UAS
-                    { wch: 8 },  // SAKIT
-                    { wch: 8 },  // IZIN
-                    { wch: 8 },  // ALPA
-                    { wch: 8 }   // HADIR
+                    { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 } 
                 ];
 
                 const wb = XLSX.utils.book_new();
@@ -695,8 +712,16 @@
                                         <h2 className="font-black text-2xl uppercase tracking-tighter">{activeTab === 'absensi' ? 'Rekap Absensi' : 'Rekap Tugas'}</h2>
                                         <button onClick={handleExport} className="px-5 py-2.5 rounded-2xl text-xs font-black bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg"><Icons.Download /> EXPORT XLSX</button>
                                     </div>
-                                    <div className="relative">
+                                    <div className="relative flex items-center gap-2 w-full lg:w-auto">
                                         <input type="text" placeholder="Cari..." className={`pl-6 pr-6 py-3 rounded-2xl text-sm w-full lg:w-80 outline-none font-bold ${isDarkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-slate-50 border-slate-200'}`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                        {/* TOMBOL KOSONGKAN TABEL MENGGUNAKAN CUSTOM MODAL */}
+                                        <button 
+                                            onClick={() => setClearAllType(activeTab)} 
+                                            title={activeTab === 'absensi' ? "Hapus Semua Riwayat Absensi" : "Hapus Semua Riwayat Tugas"}
+                                            className={`p-3 rounded-2xl transition-colors ${isDarkMode ? 'bg-slate-800 text-rose-500 hover:bg-rose-600 hover:text-white' : 'bg-rose-100 text-rose-600 hover:bg-rose-500 hover:text-white'}`}
+                                        >
+                                            <Icons.Trash2 />
+                                        </button>
                                     </div>
                                 </div>
 
@@ -719,8 +744,8 @@
                                                                     </th>
                                                                 );
                                                             })}
-                                                            <th className="px-2 md:px-4 py-4 md:py-8 text-center min-w-[80px] md:min-w-[100px] bg-blue-500/10 text-blue-600 border-l border-blue-200/30 font-black">UTS</th>
-                                                            <th className="px-2 md:px-4 py-4 md:py-8 text-center min-w-[80px] md:min-w-[100px] bg-blue-500/10 text-blue-600 border-l border-blue-200/30 font-black">UAS</th>
+                                                            <th className={`px-2 md:px-4 py-4 md:py-8 text-center min-w-[80px] md:min-w-[100px] border-l font-black ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border-slate-700' : 'bg-blue-500/10 text-blue-600 border-blue-200/30'}`}>UTS</th>
+                                                            <th className={`px-2 md:px-4 py-4 md:py-8 text-center min-w-[80px] md:min-w-[100px] border-l font-black ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border-slate-700' : 'bg-blue-500/10 text-blue-600 border-blue-200/30'}`}>UAS</th>
                                                         </>
                                                     ) : (
                                                         <>
@@ -733,8 +758,8 @@
                                                                     </th>
                                                                 );
                                                             })}
-                                                            <th className="px-2 md:px-4 py-4 md:py-8 text-center min-w-[90px] md:min-w-[110px] bg-indigo-500/10 text-indigo-600 border-l font-black">PROYEK UTS</th>
-                                                            <th className="px-2 md:px-4 py-4 md:py-8 text-center min-w-[90px] md:min-w-[110px] bg-indigo-500/10 text-indigo-600 border-l font-black">PROYEK UAS</th>
+                                                            <th className={`px-2 md:px-4 py-4 md:py-8 text-center min-w-[90px] md:min-w-[110px] border-l font-black ${isDarkMode ? 'bg-indigo-500/10 text-indigo-400 border-slate-700' : 'bg-indigo-500/10 text-indigo-600 border-indigo-200/30'}`}>PROYEK UTS</th>
+                                                            <th className={`px-2 md:px-4 py-4 md:py-8 text-center min-w-[90px] md:min-w-[110px] border-l font-black ${isDarkMode ? 'bg-indigo-500/10 text-indigo-400 border-slate-700' : 'bg-indigo-500/10 text-indigo-600 border-indigo-200/30'}`}>PROYEK UAS</th>
                                                         </>
                                                     )}
                                                     <th className="px-4 md:px-8 py-4 md:py-8 text-center border-l bg-slate-50/50">Tindakan</th>
@@ -764,10 +789,10 @@
                                                                     {[...Array(14)].map((_, i) => {
                                                                         const rec = attendanceData.find(a => a.nim === student.nim && a.id === i+1 && a.type === 'pertemuan');
                                                                         return (
-                                                                            <td key={i} className="px-1 md:px-3 py-3 md:py-5 border-l border-slate-100/30">
+                                                                            <td key={i} className={`px-1 md:px-3 py-3 md:py-5 border-l ${isDarkMode ? 'border-slate-700' : 'border-slate-100/30'}`}>
                                                                                 <div className="flex justify-center">
                                                                                     <select 
-                                                                                        className={`text-[9px] font-black p-1 md:p-2 rounded-xl border-none text-center cursor-pointer appearance-none ${!rec?.status ? 'bg-slate-100 text-slate-400 opacity-20' : rec.status === 'Hadir' ? 'bg-emerald-500 text-white' : rec.status === 'Izin' ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white'}`}
+                                                                                        className={`text-[9px] font-black p-1 md:p-2 rounded-xl border-none text-center cursor-pointer appearance-none w-full ${!rec?.status ? (isDarkMode ? 'bg-slate-800 text-slate-400 opacity-50' : 'bg-slate-100 text-slate-400 opacity-50') : rec.status === 'Hadir' ? 'bg-emerald-500 text-white' : rec.status === 'Izin' ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white'}`}
                                                                                         value={rec?.status || ""}
                                                                                         onChange={(e) => updateAttendance(student.nim, i+1, 'pertemuan', e.target.value)}
                                                                                     >
@@ -778,27 +803,60 @@
                                                                             </td>
                                                                         );
                                                                     })}
-                                                                    <td className="px-1 md:px-3 py-3 md:py-5 bg-blue-500/5 border-l border-slate-100/30"><select className="text-[9px] font-black p-1 md:p-2 rounded-xl bg-white w-full text-center border-none" value={attendanceData.find(a => a.nim === student.nim && a.type === 'uts')?.status || ""} onChange={(e) => updateAttendance(student.nim, 99, 'uts', e.target.value)}><option value="">−</option><option value="Hadir">H</option><option value="Izin">I</option><option value="Alpa">A</option></select></td>
-                                                                    <td className="px-1 md:px-3 py-3 md:py-5 bg-blue-500/5 border-l border-slate-100/30"><select className="text-[9px] font-black p-1 md:p-2 rounded-xl bg-white w-full text-center border-none" value={attendanceData.find(a => a.nim === student.nim && a.type === 'uas')?.status || ""} onChange={(e) => updateAttendance(student.nim, 100, 'uas', e.target.value)}><option value="">−</option><option value="Hadir">H</option><option value="Izin">I</option><option value="Alpa">A</option></select></td>
+                                                                    
+                                                                    {/* KOLOM UTS ABSENSI YANG ADAPTIF WARNA FONTNYA */}
+                                                                    <td className={`px-1 md:px-3 py-3 md:py-5 border-l ${isDarkMode ? 'bg-blue-500/10 border-slate-700' : 'bg-blue-50/50 border-slate-100/30'}`}>
+                                                                        <div className="flex justify-center">
+                                                                            <select 
+                                                                                className={`text-[9px] font-black p-1 md:p-2 rounded-xl w-full text-center border-none cursor-pointer appearance-none ${!attendanceData.find(a => a.nim === student.nim && a.type === 'uts')?.status ? (isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-400') : attendanceData.find(a => a.nim === student.nim && a.type === 'uts')?.status === 'Hadir' ? 'bg-emerald-500 text-white' : attendanceData.find(a => a.nim === student.nim && a.type === 'uts')?.status === 'Izin' ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white'}`} 
+                                                                                value={attendanceData.find(a => a.nim === student.nim && a.type === 'uts')?.status || ""} 
+                                                                                onChange={(e) => updateAttendance(student.nim, 99, 'uts', e.target.value)}
+                                                                            >
+                                                                                <option value="">−</option><option value="Hadir">H</option><option value="Izin">I</option><option value="Alpa">A</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </td>
+                                                                    
+                                                                    {/* KOLOM UAS ABSENSI YANG ADAPTIF WARNA FONTNYA */}
+                                                                    <td className={`px-1 md:px-3 py-3 md:py-5 border-l ${isDarkMode ? 'bg-blue-500/10 border-slate-700' : 'bg-blue-50/50 border-slate-100/30'}`}>
+                                                                        <div className="flex justify-center">
+                                                                            <select 
+                                                                                className={`text-[9px] font-black p-1 md:p-2 rounded-xl w-full text-center border-none cursor-pointer appearance-none ${!attendanceData.find(a => a.nim === student.nim && a.type === 'uas')?.status ? (isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-400') : attendanceData.find(a => a.nim === student.nim && a.type === 'uas')?.status === 'Hadir' ? 'bg-emerald-500 text-white' : attendanceData.find(a => a.nim === student.nim && a.type === 'uas')?.status === 'Izin' ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white'}`} 
+                                                                                value={attendanceData.find(a => a.nim === student.nim && a.type === 'uas')?.status || ""} 
+                                                                                onChange={(e) => updateAttendance(student.nim, 100, 'uas', e.target.value)}
+                                                                            >
+                                                                                <option value="">−</option><option value="Hadir">H</option><option value="Izin">I</option><option value="Alpa">A</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </td>
                                                                 </>
                                                             ) : (
                                                                 <>
                                                                     {[...Array(6)].map((_, i) => {
                                                                         const rec = assignmentData.find(a => a.nim === student.nim && a.id === i+1 && a.type === 'tugas');
                                                                         return (
-                                                                            <td key={i} className="px-1 md:px-3 py-3 md:py-5 border-l border-slate-100/30 text-center">
-                                                                                <select className={`text-[8px] font-black p-1 md:p-2 rounded-xl border-none text-center appearance-none ${rec ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 opacity-20'}`} value={rec ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, i+1, 'tugas', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select>
+                                                                            <td key={i} className={`px-1 md:px-3 py-3 md:py-5 border-l text-center ${isDarkMode ? 'border-slate-700' : 'border-slate-100/30'}`}>
+                                                                                <select className={`text-[8px] font-black w-full p-1 md:p-2 rounded-xl border-none text-center cursor-pointer appearance-none ${rec ? 'bg-indigo-600 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-400 opacity-50' : 'bg-slate-100 text-slate-400 opacity-50')}`} value={rec ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, i+1, 'tugas', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select>
                                                                             </td>
                                                                         );
                                                                     })}
-                                                                    <td className="px-1 md:px-3 py-3 md:py-5 bg-indigo-500/5 border-l border-slate-100/30 text-center"><select className={`text-[8px] font-black p-1 md:p-2 rounded-xl border-none text-center appearance-none ${assignmentData.some(a => a.nim === student.nim && a.type === 'uts') ? 'bg-indigo-800 text-white' : 'bg-white opacity-20'}`} value={assignmentData.some(a => a.nim === student.nim && a.type === 'uts') ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, 99, 'uts', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select></td>
-                                                                    <td className="px-1 md:px-3 py-3 md:py-5 bg-indigo-500/5 border-l border-slate-100/30 text-center"><select className={`text-[8px] font-black p-1 md:p-2 rounded-xl border-none text-center appearance-none ${assignmentData.some(a => a.nim === student.nim && a.type === 'uas') ? 'bg-indigo-800 text-white' : 'bg-white opacity-20'}`} value={assignmentData.some(a => a.nim === student.nim && a.type === 'uas') ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, 100, 'uas', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select></td>
+                                                                    
+                                                                    {/* KOLOM UTS TUGAS YANG ADAPTIF */}
+                                                                    <td className={`px-1 md:px-3 py-3 md:py-5 border-l text-center ${isDarkMode ? 'bg-indigo-500/10 border-slate-700' : 'bg-indigo-50/50 border-slate-100/30'}`}>
+                                                                        <select className={`text-[8px] font-black w-full p-1 md:p-2 rounded-xl border-none text-center cursor-pointer appearance-none ${assignmentData.some(a => a.nim === student.nim && a.type === 'uts') ? 'bg-indigo-800 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-400')}`} value={assignmentData.some(a => a.nim === student.nim && a.type === 'uts') ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, 99, 'uts', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select>
+                                                                    </td>
+                                                                    
+                                                                    {/* KOLOM UAS TUGAS YANG ADAPTIF */}
+                                                                    <td className={`px-1 md:px-3 py-3 md:py-5 border-l text-center ${isDarkMode ? 'bg-indigo-500/10 border-slate-700' : 'bg-indigo-50/50 border-slate-100/30'}`}>
+                                                                        <select className={`text-[8px] font-black w-full p-1 md:p-2 rounded-xl border-none text-center cursor-pointer appearance-none ${assignmentData.some(a => a.nim === student.nim && a.type === 'uas') ? 'bg-indigo-800 text-white' : (isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-white text-slate-400')}`} value={assignmentData.some(a => a.nim === student.nim && a.type === 'uas') ? "Selesai" : ""} onChange={(e) => updateAssignment(student.nim, 100, 'uas', e.target.value)}><option value="">−</option><option value="Selesai">SELESAI</option></select>
+                                                                    </td>
                                                                 </>
                                                             )}
                                                             <td className="px-4 md:px-8 py-3 md:py-5 text-center border-l bg-slate-50/20">
                                                                 <div className="flex gap-1 md:gap-2 justify-center">
-                                                                    <button onClick={() => openEditModal(student)} className="p-1.5 md:p-2.5 rounded-xl transition-all bg-white border hover:bg-blue-600 hover:text-white text-slate-400 shadow-sm"><Icons.Edit2 /></button>
-                                                                    <button onClick={() => handleDeleteStudent(student.nim)} className="p-1.5 md:p-2.5 rounded-xl transition-all bg-white border border-rose-50 hover:bg-rose-500 hover:text-white text-rose-400 shadow-sm"><Icons.Trash2 /></button>
+                                                                    <button onClick={() => openEditModal(student)} className={`p-1.5 md:p-2.5 rounded-xl transition-all border shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:bg-blue-600 text-slate-400 hover:text-white' : 'bg-white border-slate-200 hover:bg-blue-600 text-slate-400 hover:text-white'}`}><Icons.Edit2 /></button>
+                                                                    {/* TOMBOL HAPUS DATA SATUAN DENGAN CUSTOM MODAL */}
+                                                                    <button onClick={() => setStudentToDeleteData({ nim: student.nim, nama: student.nama })} className={`p-1.5 md:p-2.5 rounded-xl transition-all border shadow-sm ${isDarkMode ? 'bg-slate-800 border-rose-900/50 hover:bg-rose-600 text-rose-500 hover:text-white' : 'bg-white border-rose-50 hover:bg-rose-500 text-rose-400 hover:text-white'}`}><Icons.Trash2 /></button>
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -836,6 +894,39 @@
                             <button onClick={handleSaveEdit} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase shadow-xl">Simpan Perubahan</button>
                         </div>
                     </Modal>}
+
+                    {/* CONFIRMATION MODAL KOSONGKAN TABEL (Semua Data) */}
+                    {clearAllType && (
+                        <Modal isDark={isDarkMode} title="Kosongkan Tabel" onClose={() => setClearAllType(null)} icon={<Icons.AlertTriangle className="text-rose-500" />}>
+                            <div className="p-8 space-y-6">
+                                <p className={`text-sm font-bold text-center ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                    Apakah Anda yakin ingin menghapus <span className="text-rose-500 uppercase">semua riwayat {clearAllType}</span> dari seluruh mahasiswa?<br/><br/>
+                                    <span className="text-[10px] opacity-60">*Daftar mahasiswa akan tetap aman dan tidak terhapus.</span>
+                                </p>
+                                <div className="flex gap-4">
+                                    <button onClick={() => setClearAllType(null)} className={`flex-1 py-4 rounded-2xl font-black uppercase text-xs ${isDarkMode ? 'bg-slate-800 text-white hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Batal</button>
+                                    <button onClick={executeClearAllData} className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs hover:bg-rose-700 shadow-lg shadow-rose-500/30">Ya, Kosongkan</button>
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
+
+                    {/* CONFIRMATION MODAL HAPUS DATA SATUAN */}
+                    {studentToDeleteData && (
+                        <Modal isDark={isDarkMode} title="Hapus Data" onClose={() => setStudentToDeleteData(null)} icon={<Icons.AlertTriangle className="text-rose-500" />}>
+                            <div className="p-8 space-y-6">
+                                <p className={`text-sm font-bold text-center ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                    Apakah Anda yakin ingin mereset/menghapus <span className="text-rose-500 uppercase">seluruh riwayat absensi dan tugas</span> milik:<br/><br/>
+                                    <span className="text-lg font-black text-blue-500 uppercase">{studentToDeleteData.nama}</span>?<br/><br/>
+                                    <span className="text-[10px] opacity-60">*Nama mahasiswa ini TIDAK akan dihapus dari tabel.</span>
+                                </p>
+                                <div className="flex gap-4">
+                                    <button onClick={() => setStudentToDeleteData(null)} className={`flex-1 py-4 rounded-2xl font-black uppercase text-xs ${isDarkMode ? 'bg-slate-800 text-white hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Batal</button>
+                                    <button onClick={executeDeleteStudentData} className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs hover:bg-rose-700 shadow-lg shadow-rose-500/30">Ya, Reset Data</button>
+                                </div>
+                            </div>
+                        </Modal>
+                    )}
 
                     {isInputModalOpen && <Modal isDark={isDarkMode} title={`Rekap P${activePertemuan}`} onClose={() => setIsInputModalOpen(false)} icon={<Icons.UserCheck />}>
                         <div className="p-8 space-y-6">
